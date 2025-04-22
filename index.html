@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bedtime Story Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Bedtime Story Generator</h1>
+        <button id="generate-btn">Generate Story</button>
+        <div id="story-display" class="hidden">
+            <div id="slide-container">
+                <img id="story-image" src="#" alt="Story Image">
+                <p id="story-paragraph"></p>
+                <audio id="story-audio" controls></audio> 
+            </div>
+            <div class="navigation-controls">
+                 <button id="prev-btn" disabled>Previous</button>
+                 <span id="slide-number">1 / 5</span>
+                 <button id="next-btn" disabled>Next</button>
+            </div>
+             <div id="loading-indicator" class="hidden">Generating story... Please wait.</div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

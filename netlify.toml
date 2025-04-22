@@ -1,0 +1,21 @@
+# netlify.toml
+
+[build]
+  # This command is optional if you don't have a build step for your static files
+  # command = "npm run build" # Example build command if you had one
+  publish = "/"       # Directory with your index.html, style.css, script.js
+  functions = "netlify/functions" # Directory where Netlify functions live
+
+[functions]
+  # Increase timeout for potentially long-running OpenAI calls (default is 10s)
+  # Max is 26s on the free tier. Adjust if needed.
+  timeout = 25
+  # Specify node version if needed (optional, usually defaults work)
+  # node_bundler = "esbuild"
+  # external_node_modules = ["node-fetch"] # Declare external deps if needed
+
+# Optional: Redirects/rewrites if needed, usually not for simple sites
+# [[redirects]]
+#   from = "/api/*"
+#   to = "/.netlify/functions/:splat"
+#   status = 200
