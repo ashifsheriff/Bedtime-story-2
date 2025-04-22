@@ -5,137 +5,166 @@ document.addEventListener('DOMContentLoaded', () => {
     const storyImage = document.getElementById('story-image');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    const generateBtn = document.getElementById('generate-btn');
+    const generateBtn = document.getElementById('generate-btn'); // Will rename this button's function
     const loadingIndicator = document.getElementById('loading-indicator');
+    const slideNumberDisplay = document.getElementById('slide-number'); // Added for slide numbers
 
-    // --- Configuration ---
-    const STORY_ASSET_PATH = 'story_assets/sleepy_stars_journey/';
-
-    // --- Predefined Story Content ---
-    const PREDEFINED_STORY = [
-        {
-            paragraph: "Once upon a time, in a quiet corner of the night sky, lived a tiny star named Luma. Luma wasn’t the brightest or the fastest, but she had the kindest glow. Every night, she twinkled softly, hoping someone would notice her gentle light.",
-            image: `${STORY_ASSET_PATH}image1.png`,
-            audio: null // Audio skipped for now
-        },
-        {
-            paragraph: "One evening, Luma looked down at Earth and saw a little girl named Tara trying to fall asleep. Tara tossed and turned in her bed, her mind buzzing with thoughts of the day. Seeing her struggle, Luma decided she would help. With a shimmer and a giggle, Luma drifted closer to Earth. As she got near, the night air filled with a gentle hum — a lullaby only hearts could hear. Tara opened her eyes and saw the glowing star outside her window. Her eyes widened with wonder.",
-            image: `${STORY_ASSET_PATH}image2.png`,
-            audio: null
-        },
-        {
-            paragraph: "Luma whispered, “Close your eyes, little dreamer, and let’s go on a journey.” Tara, comforted by the glow, nodded and shut her eyes. In a flash, she found herself floating beside Luma in the sky, soaring past clouds, over mountains, and through silver streams of moonlight.",
-            image: `${STORY_ASSET_PATH}image3.png`,
-            audio: null
-        },
-        {
-            paragraph: "They visited sleepy owls perched on trees, swam with stardust dolphins in the Milky Way, and danced with glowing fireflies who lit up the sky like fairy lanterns. Tara laughed and felt lighter than air. The worries of the day melted away like morning mist.",
-            image: `${STORY_ASSET_PATH}image4.png`,
-            audio: null
-        },
-        {
-            paragraph: "As the adventure wound down, Luma brought Tara back to her room, her heart now calm and full. “Whenever you can’t sleep,” Luma whispered, “just look for my glow. I’ll be right here.” Tara smiled and drifted into the deepest, sweetest sleep she’d ever known. And from then on, Luma twinkled a little brighter — not because she was the biggest star, but because she had given someone a dream.",
-            image: `${STORY_ASSET_PATH}image5.png`,
-            audio: null
-        }
-    ];
+    // --- API Endpoints ---
+    const API_BASE = '/api'; // Using relative path for Flask backend
+    const STORIES_LIST_ENDPOINT = `${API_BASE}/stories`;
+    const STORY_DATA_ENDPOINT = (name) => `${API_BASE}/story/${encodeURIComponent(name)}`;
 
     // --- State ---
-    let currentStory = []; // Array of { paragraph: string, image: string (URL), audio: string (URL/data) }
+    let availableStoryNames = []; // List of story folder names ['story1', 'story2']
+    let currentStoryData = null; // Holds the full data for the currently displayed story
+    let currentStoryIndex = -1; // Index in availableStoryNames array
     let currentSlideIndex = 0;
 
     // --- Slideshow Logic ---
     function showSlide(index) {
-        if (index < 0 || index >= currentStory.length) {
-            console.error('Invalid slide index:', index);
+        if (!currentStoryData || index < 0 || index >= currentStoryData.slides.length) {
+            console.error('Invalid slide index or no story data:', index, currentStoryData);
+            // Optionally hide elements or show an error message
+            storyDisplay.classList.add('hidden'); // Hide if invalid
             return;
         }
-        const slide = currentStory[index];
-        storyText.textContent = slide.paragraph;
-        storyImage.src = slide.image || ''; // Use empty string if no image
-        storyImage.alt = `Illustration for story part ${index + 1}`;
+
+        const slide = currentStoryData.slides[index];
+        storyText.textContent = slide.paragraph || "(No text for this part)";
+        // Image paths from backend are relative to story_assets
+        storyImage.src = slide.image ? `/story_assets/${slide.image}` : ''; // Prepend base path
+        storyImage.alt = `Illustration for ${currentStoryData.name}, part ${index + 1}`;
         storyImage.onerror = () => {
-            console.error(`Error loading image: ${slide.image}`);
-            storyImage.src = ''; // Maybe hide image on error or show text placeholder?
+            console.error(`Error loading image: ${storyImage.src}`);
+            storyImage.src = ''; // Clear src on error
             storyImage.alt = 'Image failed to load';
         };
 
-        // Handle Audio - Placeholder for future
-        // if (slide.audio) {
-        //     // Logic to play audio based on type (URL, data, WebSpeech text)
-        //     console.log('Playing audio for slide', index + 1);
-        // }
+        // Update slide number display
+        slideNumberDisplay.textContent = `${index + 1} / ${currentStoryData.slides.length}`;
+
+        // Handle Audio - Placeholder
+        // ...
 
         // Update button states
         prevBtn.disabled = index === 0;
-        nextBtn.disabled = index === currentStory.length - 1;
+        nextBtn.disabled = index === currentStoryData.slides.length - 1;
 
-        // Update ARIA attributes for accessibility
+        // Update ARIA attributes
         storyDisplay.setAttribute('aria-live', 'polite');
-        storyText.setAttribute('aria-label', `Story part ${index + 1}: ${slide.paragraph}`);
+        storyText.setAttribute('aria-label', `Story part ${index + 1}: ${slide.paragraph || 'No text'}`);
+        storyDisplay.classList.remove('hidden'); // Ensure display is visible
     }
 
     function showNextSlide() {
-        if (currentSlideIndex < currentStory.length - 1) {
+        if (currentStoryData && currentSlideIndex < currentStoryData.slides.length - 1) {
             currentSlideIndex++;
             showSlide(currentSlideIndex);
         }
     }
 
     function showPrevSlide() {
-        if (currentSlideIndex > 0) {
+        if (currentStoryData && currentSlideIndex > 0) {
             currentSlideIndex--;
             showSlide(currentSlideIndex);
         }
     }
 
-    // --- Story Generation Logic (Simplified) ---
-    async function handleGenerateClick() {
-        console.log('Loading predefined story...');
-        generateBtn.disabled = true;
-        loadingIndicator.textContent = 'Loading story...';
+    // --- Story Loading and Cycling Logic ---
+    async function fetchStoryList() {
+        try {
+            console.log('Fetching story list...');
+            const response = await fetch(STORIES_LIST_ENDPOINT);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            availableStoryNames = await response.json();
+            console.log('Available stories:', availableStoryNames);
+            if (availableStoryNames.length > 0) {
+                // Enable the button if stories are found
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Load First Story'; // Initial button text
+            } else {
+                loadingIndicator.textContent = 'No stories found in story_assets.';
+                loadingIndicator.classList.remove('hidden');
+                generateBtn.disabled = true;
+                generateBtn.textContent = 'No Stories Available';
+            }
+        } catch (error) {
+            console.error('Error fetching story list:', error);
+            loadingIndicator.textContent = 'Error loading story list. Is the backend running?';
+            loadingIndicator.classList.remove('hidden');
+            generateBtn.disabled = true;
+        }
+    }
+
+    async function loadStory(storyName) {
+        if (!storyName) return false;
+
+        console.log(`Fetching story data for: ${storyName}`);
+        loadingIndicator.textContent = `Loading '${storyName}'...`;
         loadingIndicator.classList.remove('hidden');
         storyDisplay.classList.add('hidden');
-        // window.speechSynthesis.cancel(); // Stop any ongoing speech (if implemented later)
+        generateBtn.disabled = true; // Disable while loading
 
         try {
-            // Directly use the predefined story
-            currentStory = PREDEFINED_STORY;
+            const response = await fetch(STORY_DATA_ENDPOINT(storyName));
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            currentStoryData = await response.json();
 
-            if (!currentStory || currentStory.length === 0) {
-                throw new Error('Predefined story is empty.');
+            if (!currentStoryData || !currentStoryData.slides || currentStoryData.slides.length === 0) {
+                throw new Error('Received invalid or empty story data.');
             }
 
-            console.log('Predefined story loaded:', currentStory.length, 'parts');
+            console.log(`Story '${storyName}' loaded:`, currentStoryData.slides.length, 'slides');
 
             // Show the first slide
             currentSlideIndex = 0;
             showSlide(currentSlideIndex);
 
-            // Show the story display
-            storyDisplay.classList.remove('hidden');
+            // Update button text for next action
+            generateBtn.textContent = 'Next Story';
+            return true; // Indicate success
 
         } catch (error) {
-            console.error('Error loading predefined story:', error);
-            alert(`Failed to load the story: ${error.message}`);
-            // Optionally hide story display or show an error message
+            console.error(`Error loading story '${storyName}':`, error);
+            alert(`Failed to load story '${storyName}': ${error.message}`);
             storyDisplay.classList.add('hidden');
+            return false; // Indicate failure
         } finally {
-            // Hide loading indicator and re-enable button
             loadingIndicator.classList.add('hidden');
-            generateBtn.disabled = false;
+            generateBtn.disabled = false; // Re-enable button
         }
     }
 
+    async function handleCycleStoryClick() {
+        if (availableStoryNames.length === 0) {
+            console.warn('No stories available to cycle.');
+            return;
+        }
+
+        // Cycle to the next story index
+        currentStoryIndex = (currentStoryIndex + 1) % availableStoryNames.length;
+        const nextStoryName = availableStoryNames[currentStoryIndex];
+
+        await loadStory(nextStoryName);
+    }
+
     // --- Event Listeners ---
-    generateBtn.addEventListener('click', handleGenerateClick);
+    generateBtn.addEventListener('click', handleCycleStoryClick); // Changed listener
     prevBtn.addEventListener('click', showPrevSlide);
     nextBtn.addEventListener('click', showNextSlide);
 
     // --- Initial Setup ---
-    // Hide story display initially
     storyDisplay.classList.add('hidden');
-    loadingIndicator.classList.add('hidden');
+    loadingIndicator.textContent = 'Loading story list...';
+    loadingIndicator.classList.remove('hidden');
+    generateBtn.disabled = true; // Disable button until list is fetched
+    generateBtn.textContent = 'Loading...'; // Initial button text
 
-    console.log('Bedtime Story Generator script loaded (static mode).');
+    fetchStoryList(); // Fetch the list of stories on page load
+
+    console.log('Bedtime Story Generator script loaded (dynamic mode).');
 });
