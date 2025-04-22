@@ -1,0 +1,1 @@
+openai>=1.0.0 # Use a recent version compatible with current API
