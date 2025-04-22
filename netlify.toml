@@ -12,7 +12,7 @@
   timeout = 25
   # Specify node version if needed (optional, usually defaults work)
   # node_bundler = "esbuild"
-  # external_node_modules = ["node-fetch"] # Declare external deps if needed
+  external_node_modules = ["node-fetch"] # Declare external deps if needed
 
 # Optional: Redirects/rewrites if needed, usually not for simple sites
 # [[redirects]]
